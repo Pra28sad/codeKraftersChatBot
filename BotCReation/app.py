@@ -16,8 +16,8 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable static file caching
 
-OPENROUTER_API_KEY = "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"
-# OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "sk-or-v1-6c72c0f966aa54b5741229f80144aeed1b60ccc0bccbf13824d64200c26e3b"
+# OPENROUTER_API_KEY = "sk-or-v1-ca990ff4d8338f922778e1c4127a6177d584902ae879a6c94f22c194b5cad6"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Minimal company info - just enough for context
