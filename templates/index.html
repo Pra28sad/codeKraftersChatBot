@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jennifer - CodeKrafters AI Assistant</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=1) }}" />
+</head>
+<body>
+  <!-- Floating Bot Widget -->
+  <div id="bot-widget" class="bot-widget" role="button" tabindex="0" aria-label="Toggle chat window">
+    <div class="bot-icon">
+      <i class="fas fa-robot"></i>
+    </div>
+    <span class="bot-label">Jennifer</span>
+  </div>
+
+  <!-- Chat Window (hidden by default) -->
+  <div id="chat-window" class="chat-window hidden">
+    <div class="chat-container">
+      <h2>
+        <i class="fas fa-robot"></i>
+        Jennifer
+      </h2>
+      <div id="chat-box" class="chat-box">
+        <div class="message bot">
+          Hi! I'm Jennifer, CodeKrafters' AI assistant. How can I help you today? 👋
+          <span class="timestamp"></span>
+        </div>
+      </div>
+      <button id="scroll-bottom" class="scroll-bottom" aria-label="Scroll to bottom">
+        <i class="fas fa-arrow-down"></i>
+      </button>
+      <form id="chat-form">
+        <input
+          type="text"
+          id="user-input"
+          placeholder="Ask me anything about our services..."
+          autocomplete="off"
+          required
+        />
+        <button type="button" id="voice-input-btn" class="voice-btn" aria-label="Voice input">
+          <i class="fas fa-microphone"></i>
+        </button>
+        <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const botWidget = document.getElementById('bot-widget');
+    const chatWindow = document.getElementById('chat-window');
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('user-input');
+    const chatBox = document.getElementById('chat-box');
+    const submitButton = document.getElementById('send-btn');
+    const scrollBottomBtn = document.getElementById('scroll-bottom');
+    const voiceButton = document.getElementById('voice-input-btn');
+    let isListening = false;
+    let lastUserQuery = '';
+
+    // Add scroll event listener to show/hide scroll button
+    chatBox.addEventListener('scroll', () => {
+      const isScrolledUp = chatBox.scrollTop < chatBox.scrollHeight - chatBox.clientHeight - 100;
+      scrollBottomBtn.classList.toggle('visible', isScrolledUp);
+    });
+
+    // Update scroll button click handler
+    scrollBottomBtn.addEventListener('click', () => {
+      chatBox.scrollTo({
+        top: chatBox.scrollHeight,
+        behavior: 'smooth'
+      });
+    });
+
+    function scrollChatToBottom() {
+      const shouldScrollSmoothly = chatBox.scrollTop > 0;
+      chatBox.scrollTo({
+        top: chatBox.scrollHeight,
+        behavior: shouldScrollSmoothly ? 'smooth' : 'auto'
+      });
+      scrollBottomBtn.classList.remove('visible');
+    }
+
+    // Speech Recognition Setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isListening = true;
+        voiceButton.classList.add('listening');
+        voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
+        input.placeholder = "Listening...";
+      };
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+        input.value = transcript;
+        stopListening();
+        input.focus(); // Focus on the input field so user can review and edit if needed
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error !== 'aborted') {
+          console.error('Speech recognition error:', event.error);
+          addMessage('bot', "I couldn't hear you clearly. Could you try again? 🎤");
+        }
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        stopListening();
+      };
+
+      voiceButton.addEventListener('click', () => {
+        if (!isListening) {
+          startListening();
+        } else {
+          stopListening();
+        }
+      });
+    } else {
+      voiceButton.style.display = 'none';
+      console.log('Speech recognition not supported');
+    }
+
+    function startListening() {
+      try {
+        recognition.start();
+      } catch (error) {
+        console.error('Speech recognition error:', error);
+      }
+    }
+
+    function stopListening() {
+      isListening = false;
+      voiceButton.classList.remove('listening');
+      voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+      input.placeholder = "Ask me anything about our services...";
+      try {
+        recognition.stop();
+      } catch (error) {
+        console.error('Speech recognition error:', error);
+      }
+    }
+
+    function getFormattedTime() {
+      const now = new Date();
+      return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    document.querySelector('.message.bot .timestamp').textContent = getFormattedTime();
+
+    function formatProjectResponse(query) {
+      // Remove the response formatting from frontend
+      // Let the backend handle the response generation
+      return null;
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const userText = input.value.trim();
+      if (!userText) return;
+
+      lastUserQuery = userText;
+      addMessage('user', userText);
+      input.value = '';
+      input.disabled = true;
+      submitButton.disabled = true;
+
+      // Show typing indicator
+      const typingIndicator = showTypingIndicator();
+
+      try {
+        // Add a small delay to show the typing animation (minimum 1 second)
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+        await delay(Math.max(1000, userText.length * 20)); // Longer delay for longer messages
+
+        // All queries now go through the API
+        const response = await fetch('/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            message: userText,
+            context: lastUserQuery // Send previous context if needed
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+        removeTypingIndicator(typingIndicator);
+        
+        // Process and display the response
+        addMessage('bot', data.reply);
+      } catch (error) {
+        console.error('Error:', error);
+        removeTypingIndicator(typingIndicator);
+        addMessage('bot', "I'm having trouble connecting right now. Could you please try again? 🔄");
+      } finally {
+        input.disabled = false;
+        submitButton.disabled = false;
+        input.focus();
+      }
+    }
+
+    function addMessage(sender, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message', sender);
+      
+      if (sender === 'bot') {
+        // Remove asterisks from the text first
+        let processedText = text.replace(/\*\*/g, '');
+        
+        // Format sections and bullet points
+        if (processedText.includes('\n')) {
+          const lines = processedText.split('\n');
+          processedText = lines.map(line => {
+            if (line.trim().startsWith('#')) {
+              // Section headers
+              return `<div class="section-heading">${line.replace(/^#\s*/, '')}</div>`;
+            } else if (line.trim().startsWith('-')) {
+              // Bullet points with possible title and content
+              const content = line.substring(1).trim();
+              if (content.includes(':')) {
+                const [title, description] = content.split(':');
+                return `<div class="bullet-point">
+                  <div class="bullet-point-title">${title.trim()}</div>
+                  <div class="bullet-point-content">${description.trim()}</div>
+                </div>`;
+              } else {
+                return `<div class="bullet-point">${content}</div>`;
+              }
+            }
+            return line;
+          }).join('\n');
+        }
+
+        // Handle key information blocks
+        processedText = processedText.replace(
+          /\[KEY INFO\]([\s\S]*?)\[\/KEY INFO\]/g,
+          (match, content) => `<div class="key-info">${content.trim()}</div>`
+        );
+
+        msgDiv.innerHTML = processedText;
+      } else {
+        msgDiv.textContent = text.replace(/\*\*/g, '');
+        lastUserQuery = text.replace(/\*\*/g, '');
+      }
+      
+      const timestamp = document.createElement('span');
+      timestamp.classList.add('timestamp');
+      timestamp.textContent = getFormattedTime();
+      msgDiv.appendChild(timestamp);
+      
+      chatBox.appendChild(msgDiv);
+      scrollChatToBottom();
+    }
+
+    function createTypingIndicator() {
+      const indicator = document.createElement('div');
+      indicator.className = 'typing-indicator';
+      indicator.innerHTML = `
+        <span></span>
+        <span></span>
+        <span></span>
+      `;
+      return indicator;
+    }
+
+    function showTypingIndicator() {
+      const indicator = createTypingIndicator();
+      chatBox.appendChild(indicator);
+      scrollChatToBottom();
+      return indicator;
+    }
+
+    function removeTypingIndicator(indicator) {
+      if (indicator && indicator.parentNode) {
+        indicator.parentNode.removeChild(indicator);
+      }
+    }
+
+    // Handle form submission
+    form.addEventListener('submit', handleSubmit);
+
+    // Handle Enter key press
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit(e);
+      }
+    });
+
+    // Handle send button click
+    submitButton.addEventListener('click', function(e) {
+      e.preventDefault();
+      handleSubmit(e);
+    });
+
+    // Toggle chat window
+    botWidget.addEventListener('click', () => {
+      chatWindow.classList.toggle('hidden');
+      botWidget.classList.toggle('chat-open');
+      
+      if (!chatWindow.classList.contains('hidden')) {
+        input.focus();
+        scrollChatToBottom();
+      }
+    });
+
+    // Add animation restart when chat is closed
+    chatWindow.addEventListener('transitionend', (e) => {
+      if (e.propertyName === 'opacity' && chatWindow.classList.contains('hidden')) {
+        // Remove the chat-open class to restart animations
+        botWidget.classList.remove('chat-open');
+      }
+    });
+
+    // Handle escape key to close chat
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !chatWindow.classList.contains('hidden')) {
+        chatWindow.classList.add('hidden');
+        botWidget.classList.remove('chat-open');
+      }
+    });
+
+    // Handle clicking outside to close chat
+    document.addEventListener('click', (e) => {
+      if (!chatWindow.classList.contains('hidden') && 
+          !chatWindow.contains(e.target) && 
+          !botWidget.contains(e.target)) {
+        chatWindow.classList.add('hidden');
+        botWidget.classList.remove('chat-open');
+      }
+    });
+  </script>
+</body>
+</html>
